@@ -1,73 +1,11 @@
+import yaml
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split, Dataset
+from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from PIL import Image
-import os
-import yaml
-from tqdm import tqdm
-from collections import OrderedDict
-from model.SUNet_detail import SUNet
-
-
-class SUNet_model(nn.Module):
-    def __init__(self, config):
-        super(SUNet_model, self).__init__()
-        self.config = config
-        self.swin_unet = SUNet(img_size=config['SWINUNET']['IMG_SIZE'],
-                               patch_size=config['SWINUNET']['PATCH_SIZE'],
-                               in_chans=1,  # Changed from 3 to 1 for grayscale images
-                               out_chans=1,  # Changed from 3 to 1 for grayscale images
-                               embed_dim=config['SWINUNET']['EMB_DIM'],
-                               depths=config['SWINUNET']['DEPTH_EN'],
-                               num_heads=config['SWINUNET']['HEAD_NUM'],
-                               window_size=config['SWINUNET']['WIN_SIZE'],
-                               mlp_ratio=config['SWINUNET']['MLP_RATIO'],
-                               qkv_bias=config['SWINUNET']['QKV_BIAS'],
-                               qk_scale=config['SWINUNET']['QK_SCALE'],
-                               drop_rate=config['SWINUNET']['DROP_RATE'],
-                               drop_path_rate=config['SWINUNET']['DROP_PATH_RATE'],
-                               ape=config['SWINUNET']['APE'],
-                               patch_norm=config['SWINUNET']['PATCH_NORM'],
-                               use_checkpoint=config['SWINUNET']['USE_CHECKPOINTS'])
-
-    def forward(self, x):
-        print("Input shape:", x.shape)  # Debugging statement
-        logits = self.swin_unet(x)
-        return logits
-
-
-class CustomDataset(Dataset):
-    def __init__(self, image_dir, transform=None):
-        self.image_dir = image_dir
-        self.image_paths = [os.path.join(image_dir, img) for img in os.listdir(image_dir)]
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        img_path = self.image_paths[idx]
-        image = Image.open(img_path).convert('L')
-        if self.transform:
-            image = self.transform(image)
-        return image, image
-
-
-def load_checkpoint(model, path):
-    checkpoint = torch.load(path)
-    model_state_dict = checkpoint["state_dict"]
-    new_state_dict = OrderedDict()
-    for k, v in model_state_dict.items():
-        if 'swin_unet.conv_first.weight' in k and v.shape[1] == 3:
-            v = v.mean(dim=1, keepdim=True)  # Convert from 3 channels to 1 channel
-        if 'swin_unet.output.weight' in k and v.shape[0] == 3:
-            v = v.mean(dim=0, keepdim=True)  # Convert from 3 channels to 1 channel
-        name = k.replace("module.", "")  # remove `module.`
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict, strict=False)
-
+from SUNet_detail import SUNet_model, load_checkpoint  # Adjust these imports based on your project structure
+from custom_dataset import CustomDataset  # Assuming you have a custom dataset class
 
 if __name__ == '__main__':
     # Load yaml configuration file
@@ -88,6 +26,7 @@ if __name__ == '__main__':
     # Prepare dataset
     transform = transforms.Compose([
         transforms.Resize((128, 128)),
+        transforms.Grayscale(),  # Ensure images are converted to grayscale
         transforms.ToTensor(),
     ])
     dataset = CustomDataset(image_dir=image_dir, transform=transform)
