@@ -78,7 +78,7 @@ if __name__ == '__main__':
 
     # Paths
     image_dir = './input_images/'
-    pretrained_weights_path = './pretrained_weights.pth'
+    pretrained_weights_path = './pretrain_model.pth'
 
     # Prepare dataset
     transform = transforms.Compose([
