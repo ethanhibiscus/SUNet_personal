@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from grayscale_dataset import GrayscaleImageDataset  # Import the dataset class
-from your_model_module import YourModel  # Replace this with the actual module and model import
+from model.SUNet import SUNet_model  # Replace this with the actual module and model import
 
 # Paths
 noisy_dir = "./input_images"
