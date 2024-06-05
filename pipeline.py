@@ -12,6 +12,7 @@ from model.SUNet import SUNet_model
 import math
 from tqdm import tqdm
 import yaml
+from skimage import img_as_ubyte
 
 # Load configuration
 with open('training.yaml', 'r') as config:
