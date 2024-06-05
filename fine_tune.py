@@ -68,8 +68,13 @@ if __name__ == '__main__':
     # Load yaml configuration file
     with open('training.yaml', 'r') as config:
         opt = yaml.safe_load(config)
-    Train = opt['TRAINING']
-    OPT = opt['OPTIM']
+
+    # Check and set default values if keys are missing
+    Train = opt.get('TRAINING', {})
+    Train.setdefault('BATCH_SIZE', 8)  # Set a default batch size
+    Train.setdefault('EPOCHS', 10)  # Set a default number of epochs
+    OPT = opt.get('OPTIM', {})
+    OPT.setdefault('LR', 0.001)  # Set a default learning rate
 
     # Paths
     image_dir = './input_images/'
