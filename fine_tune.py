@@ -1,11 +1,13 @@
-import yaml
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
+# Example snippet from SUNet_detail.py with debugging
 
-# Assuming CustomDataset and SUNet_model are defined elsewhere
+class Block(nn.Module):
+    def forward(self, x):
+        # ... (previous code)
+        x = x.view(B, H, W, C)  # This line causes the error
+        print(f"x shape after view: {x.shape}")  # Debugging statement
+        # ... (rest of the code)
+
+# Example snippet from fine_tune.py
 
 if __name__ == '__main__':
     # Load yaml configuration file
