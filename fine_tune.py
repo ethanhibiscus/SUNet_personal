@@ -33,6 +33,7 @@ class SUNet_model(nn.Module):
                                use_checkpoint=config['SWINUNET']['USE_CHECKPOINTS'])
 
     def forward(self, x):
+        print("Input shape:", x.shape)  # Debugging statement
         logits = self.swin_unet(x)
         return logits
 
@@ -112,7 +113,9 @@ if __name__ == '__main__':
         running_loss = 0.0
         for inputs, targets in train_loader:
             optimizer.zero_grad()
+            print("Before forward pass:", inputs.shape)  # Debugging statement
             outputs = model(inputs)
+            print("After forward pass:", outputs.shape)  # Debugging statement
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
