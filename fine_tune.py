@@ -59,6 +59,10 @@ def load_checkpoint(model, path):
     model_state_dict = checkpoint["state_dict"]
     new_state_dict = OrderedDict()
     for k, v in model_state_dict.items():
+        if 'swin_unet.conv_first.weight' in k and v.shape[1] == 3:
+            v = v.mean(dim=1, keepdim=True)  # Convert from 3 channels to 1 channel
+        if 'swin_unet.output.weight' in k and v.shape[0] == 3:
+            v = v.mean(dim=0, keepdim=True)  # Convert from 3 channels to 1 channel
         name = k.replace("module.", "")  # remove `module.`
         new_state_dict[name] = v
     model.load_state_dict(new_state_dict, strict=False)
@@ -124,3 +128,7 @@ if __name__ == '__main__':
                 loss = criterion(outputs, targets)
                 val_loss += loss.item()
         print(f"Validation Loss: {val_loss/len(val_loader)}")
+
+    # Save the model
+    torch.save(model.state_dict(), './fine_tuned_model.pth')
+    print("Model saved to ./fine_tuned_model.pth")
