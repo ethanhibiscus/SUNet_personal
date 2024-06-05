@@ -6,6 +6,7 @@ from torchvision import transforms
 import os
 from PIL import Image
 from model.SUNet_detail import SUNet
+import yaml
 
 class GrayscaleImageDataset(Dataset):
     def __init__(self, noisy_dir, reference_dir, transform=None):
@@ -77,13 +78,19 @@ dataset = GrayscaleImageDataset(noisy_dir, reference_dir, transform=transform)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # Load configuration from yaml
-import yaml
 with open('./training.yaml', 'r') as config_file:
     config = yaml.safe_load(config_file)
 
 # Model, Loss, Optimizer
 model = SUNet_model(config)  # Initialize the SUNet model with configuration
-model.load_state_dict(torch.load(pretrained_model_path))
+
+# Load pretrained model state dict
+checkpoint = torch.load(pretrained_model_path)
+if 'state_dict' in checkpoint:
+    model.load_state_dict(checkpoint['state_dict'])
+else:
+    model.load_state_dict(checkpoint)
+
 model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
 
 criterion = nn.MSELoss()
