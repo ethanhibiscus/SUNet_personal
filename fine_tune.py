@@ -78,7 +78,7 @@ dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # Load configuration from yaml
 import yaml
-with open('./model/training.yaml', 'r') as config_file:
+with open('./training.yaml', 'r') as config_file:
     config = yaml.safe_load(config_file)
 
 # Model, Loss, Optimizer
