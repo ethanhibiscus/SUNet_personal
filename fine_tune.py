@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import transforms
-from SUNet_detail import SUNet_model, load_checkpoint  # Adjust these imports based on your project structure
-from custom_dataset import CustomDataset  # Assuming you have a custom dataset class
+
+# Assuming CustomDataset and SUNet_model are defined elsewhere
 
 if __name__ == '__main__':
     # Load yaml configuration file
@@ -26,7 +26,6 @@ if __name__ == '__main__':
     # Prepare dataset
     transform = transforms.Compose([
         transforms.Resize((128, 128)),
-        transforms.Grayscale(),  # Ensure images are converted to grayscale
         transforms.ToTensor(),
     ])
     dataset = CustomDataset(image_dir=image_dir, transform=transform)
