@@ -1,0 +1,7 @@
+torch
+torchvision
+PyYAML
+tensorboardX
+tqdm
+warmup-scheduler
+Pillow
