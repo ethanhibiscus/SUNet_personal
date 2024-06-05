@@ -61,7 +61,7 @@ class SUNet_model(nn.Module):
 # Paths
 noisy_dir = "./input_images"
 reference_dir = "./reference_images"
-pretrained_model_path = "./pretrain_model/model_bestPSNR.pth"
+pretrained_model_path = "./pretrain-model/model_bestPSNR.pth"
 save_model_path = "./fine_tuned_model.pth"
 
 # Hyperparameters
