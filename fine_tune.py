@@ -5,50 +5,20 @@ from torch.utils.data import DataLoader, random_split, Dataset
 from torchvision import transforms
 from PIL import Image
 import os
-from model.SUNet_detail import SUNet
 import yaml
 from tqdm import tqdm
 from collections import OrderedDict
+from model.SUNet_detail import SUNet
 
-# Custom dataset
-class CustomDataset(Dataset):
-    def __init__(self, image_dir, transform=None):
-        self.image_dir = image_dir
-        self.image_paths = [os.path.join(image_dir, img) for img in os.listdir(image_dir)]
-        self.transform = transform
 
-    def __len__(self):
-        return len(self.image_paths)
-
-    def __getitem__(self, idx):
-        img_path = self.image_paths[idx]
-        image = Image.open(img_path).convert('L')
-        if self.transform:
-            image = self.transform(image)
-        return image, image
-
-# Transformations
-transform = transforms.Compose([
-    transforms.ToTensor(),
-])
-
-# Load dataset
-dataset = CustomDataset(image_dir='./input_images/', transform=transform)
-val_size = 100
-train_size = len(dataset) - val_size
-val_dataset, train_dataset = random_split(dataset, [val_size, train_size])
-
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
-
-# Define model
 class SUNet_model(nn.Module):
     def __init__(self, config):
         super(SUNet_model, self).__init__()
+        self.config = config
         self.swin_unet = SUNet(img_size=config['SWINUNET']['IMG_SIZE'],
                                patch_size=config['SWINUNET']['PATCH_SIZE'],
-                               in_chans=1,  # Adjust for grayscale images
-                               out_chans=1,  # Adjust for grayscale images
+                               in_chans=1,  # Changed from 3 to 1 for grayscale images
+                               out_chans=1,  # Changed from 3 to 1 for grayscale images
                                embed_dim=config['SWINUNET']['EMB_DIM'],
                                depths=config['SWINUNET']['DEPTH_EN'],
                                num_heads=config['SWINUNET']['HEAD_NUM'],
@@ -66,61 +36,86 @@ class SUNet_model(nn.Module):
         logits = self.swin_unet(x)
         return logits
 
-# Load configuration
-with open('training.yaml', 'r') as config:
-    opt = yaml.safe_load(config)
 
-model = SUNet_model(opt).cuda()
+class CustomDataset(Dataset):
+    def __init__(self, image_dir, transform=None):
+        self.image_dir = image_dir
+        self.image_paths = [os.path.join(image_dir, img) for img in os.listdir(image_dir)]
+        self.transform = transform
 
-# Load pretrained weights
-def load_checkpoint(model, weights):
-    checkpoint = torch.load(weights)
-    try:
-        model.load_state_dict(checkpoint["state_dict"])
-    except:
-        state_dict = checkpoint["state_dict"]
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        model.load_state_dict(new_state_dict)
+    def __len__(self):
+        return len(self.image_paths)
 
-pretrained_weights_path = './pretrain-model/model_bestPSNR.pth'
-load_checkpoint(model, pretrained_weights_path)
+    def __getitem__(self, idx):
+        img_path = self.image_paths[idx]
+        image = Image.open(img_path).convert('L')
+        if self.transform:
+            image = self.transform(image)
+        return image, image
 
-# Loss and optimizer
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=opt['OPTIM']['LR'])
 
-# Training loop
-num_epochs = opt['TRAINING']['EPOCHS']
-for epoch in range(num_epochs):
-    model.train()
-    running_loss = 0.0
-    for inputs, targets in tqdm(train_loader):
-        inputs, targets = inputs.cuda(), targets.cuda()
+def load_checkpoint(model, path):
+    checkpoint = torch.load(path)
+    model_state_dict = checkpoint["state_dict"]
+    new_state_dict = OrderedDict()
+    for k, v in model_state_dict.items():
+        name = k.replace("module.", "")  # remove `module.`
+        new_state_dict[name] = v
+    model.load_state_dict(new_state_dict, strict=False)
 
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-        running_loss += loss.item() * inputs.size(0)
 
-    epoch_loss = running_loss / train_size
-    print(f'Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}')
+if __name__ == '__main__':
+    # Load yaml configuration file
+    with open('training.yaml', 'r') as config:
+        opt = yaml.safe_load(config)
+    Train = opt['TRAINING']
+    OPT = opt['OPTIM']
 
-    # Evaluation
-    model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for inputs, targets in val_loader:
-            inputs, targets = inputs.cuda(), targets.cuda()
+    # Paths
+    image_dir = './input_images/'
+    pretrained_weights_path = './pretrained_weights.pth'
+
+    # Prepare dataset
+    transform = transforms.Compose([
+        transforms.Resize((128, 128)),
+        transforms.ToTensor(),
+    ])
+    dataset = CustomDataset(image_dir=image_dir, transform=transform)
+    val_size = 100
+    train_size = len(dataset) - val_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=Train['BATCH_SIZE'], shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=Train['BATCH_SIZE'], shuffle=False)
+
+    # Model
+    model = SUNet_model(opt)
+
+    # Load pretrained weights
+    load_checkpoint(model, pretrained_weights_path)
+
+    # Training setup
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=OPT['LR'])
+
+    # Training loop
+    for epoch in range(Train['EPOCHS']):
+        model.train()
+        running_loss = 0.0
+        for inputs, targets in train_loader:
+            optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
-            val_loss += loss.item() * inputs.size(0)
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+        print(f"Epoch {epoch+1}, Loss: {running_loss/len(train_loader)}")
 
-    val_loss /= val_size
-    print(f'Validation Loss: {val_loss:.4f}')
-
-print('Training complete')
+        # Validation
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for inputs, targets in val_loader:
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+                val_loss += loss.item()
+        print(f"Validation Loss: {val_loss/len(val_loader)}")
