@@ -1,6 +1,8 @@
 import os
 import torch
 import yaml
+import random
+import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -11,7 +13,6 @@ from model.SUNet import SUNet_model
 from PIL import Image
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-
 # Set Seeds
 torch.backends.cudnn.benchmark = True
 random.seed(1234)
