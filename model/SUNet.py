@@ -25,13 +25,12 @@ class SUNet_model(nn.Module):
     def forward(self, x):
         logits = self.swin_unet(x)
         return logits
-    
+
 if __name__ == '__main__':
     from utils.model_utils import network_parameters
     import torch
     import yaml
     from thop import profile
-    from utils.model_utils import network_parameters
 
     ## Load yaml configuration file
     with open('../training.yaml', 'r') as config:
