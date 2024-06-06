@@ -26,7 +26,7 @@ parser.add_argument('--size', default=256, type=int, help='model image patch siz
 parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')  # Added this line
 parser.add_argument('--result_dir', default='./finetuned_output_results/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
-args = parser.parse_args(
+args = parser.parse_args()
 # Function definitions
 def overlapped_square(timg, kernel=256, stride=128):
     patch_images = []
