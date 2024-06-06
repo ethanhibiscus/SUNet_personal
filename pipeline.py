@@ -93,6 +93,7 @@ for file_ in files:
         square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
         output_patch = torch.zeros(square_input_[0].shape).type_as(square_input_[0])
         for i, data in enumerate(square_input_):
+            print(f'Processing patch {i}, shape: {square_input_[i].shape}')
             restored = model(square_input_[i])
             if i == 0:
                 output_patch += restored
