@@ -39,7 +39,9 @@ class CustomDataset(Dataset):
         return noisy_image, reference_image
 
 # Define transforms
+resize_transform = transforms.Resize((256, 256))  # Adjust this size to match the expected input resolution
 transform = transforms.Compose([
+    resize_transform,
     transforms.Grayscale(num_output_channels=3),  # Convert grayscale to 3-channel
     transforms.ToTensor()  # Convert PIL image to tensor
 ])
@@ -133,6 +135,7 @@ for epoch in range(1, OPT['EPOCHS'] + 1):
                 noisy_images, reference_images = noisy_images.cuda(), reference_images.cuda()
 
                 restored_images = model_restored(noisy_images)
+                print(f"Validation restored images size: {restored_images.size()}")
                 psnr_val.append(utils.torchPSNR(restored_images, reference_images))
 
         avg_psnr_val = torch.stack(psnr_val).mean().item()
