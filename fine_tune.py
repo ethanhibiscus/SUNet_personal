@@ -53,8 +53,8 @@ val_size = 200
 train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
 # DataLoader
-train_loader = DataLoader(dataset=train_dataset, batch_size=16, shuffle=True, num_workers=4)
-val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=False, num_workers=4)
+train_loader = DataLoader(dataset=train_dataset, batch_size=16, shuffle=True, num_workers=1)
+val_loader = DataLoader(dataset=val_dataset, batch_size=16, shuffle=False, num_workers=1)
 
 # Set seeds
 torch.backends.cudnn.benchmark = True
@@ -74,8 +74,9 @@ model_restored = SUNet_model(opt)
 model_restored.cuda()
 
 # Optimizer and scheduler
-optimizer = optim.Adam(model_restored.parameters(), lr=OPT['LR_INITIAL'], betas=(0.9, 0.999), eps=1e-8)
-scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, OPT['EPOCHS'] - 3, eta_min=OPT['LR_MIN'])
+initial_lr = float(OPT['LR_INITIAL'])
+optimizer = optim.Adam(model_restored.parameters(), lr=initial_lr, betas=(0.9, 0.999), eps=1e-8)
+scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, OPT['EPOCHS'] - 3, eta_min=float(OPT['LR_MIN']))
 scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=3, after_scheduler=scheduler_cosine)
 scheduler.step()
 
