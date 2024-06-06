@@ -102,6 +102,11 @@ for epoch in range(1, OPT['EPOCHS'] + 1):
 
         optimizer.zero_grad()
         restored_images = model_restored(noisy_images)
+        
+        # Check the size of the tensor before reshaping
+        B, C, H, W = restored_images.size()
+        print(f"Restored images size: {restored_images.size()}")
+        
         loss = criterion(restored_images, reference_images)
         loss.backward()
         optimizer.step()
