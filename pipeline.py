@@ -12,7 +12,6 @@ from model.SUNet import SUNet_model
 import math
 from tqdm import tqdm
 import yaml
-from skimage import img_as_ubyte
 
 # Load configuration
 with open('training.yaml', 'r') as config:
@@ -22,25 +21,25 @@ with open('training.yaml', 'r') as config:
 parser = argparse.ArgumentParser(description='Demo Image Restoration')
 parser.add_argument('--input_dir', default='./input_images/', type=str, help='Input images')
 parser.add_argument('--window_size', default=8, type=int, help='window size')
-parser.add_argument('--size', default=256, type=int, help='model image patch size')
-parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
+parser.add_argument('--size', default=128, type=int, help='model image patch size')  # Set to 128 for your images
+parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')  # Set to 128 for your images
 parser.add_argument('--result_dir', default='./output_results/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
 args = parser.parse_args()
 
 # Function definitions
-def overlapped_square(timg, kernel=256, stride=128):
+def overlapped_square(timg, kernel=128, stride=128):  # Adjusted for 128x128 images
     patch_images = []
     b, c, h, w = timg.size()
     X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 3, X, X).type_as(timg)
+    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change 3 to 1 for b/w images
     mask = torch.zeros(1, 1, X, X).type_as(timg)
 
     img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
     mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
 
     patch = img.unfold(3, kernel, stride).unfold(2, kernel, stride)
-    patch = patch.contiguous().view(b, c, -1, kernel, kernel)
+    patch = patch.contiguous().view(b, 1, -1, kernel, kernel)  # Change 3 to 1 for b/w images
     patch = patch.permute(2, 0, 1, 4, 3)
 
     for each in range(len(patch)):
@@ -49,7 +48,7 @@ def overlapped_square(timg, kernel=256, stride=128):
     return patch_images, mask, X
 
 def save_img(filepath, img):
-    cv2.imwrite(filepath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    cv2.imwrite(filepath, img)
 
 def load_checkpoint(model, weights):
     checkpoint = torch.load(weights)
@@ -87,7 +86,7 @@ stride = args.stride
 model_img = args.size
 
 for file_ in files:
-    img = Image.open(file_).convert('RGB')
+    img = Image.open(file_).convert('L')  # Convert to grayscale
     input_ = TF.to_tensor(img).unsqueeze(0).cuda()
     with torch.no_grad():
         square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
