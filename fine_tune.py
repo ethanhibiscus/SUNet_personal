@@ -135,7 +135,7 @@ for epoch in range(1, OPT['EPOCHS'] + 1):
                 noisy_images, reference_images = noisy_images.cuda(), reference_images.cuda()
 
                 restored_images = model_restored(noisy_images)
-                print(f"Validation restored images size: {restored_images.size()}")
+                #print(f"Validation restored images size: {restored_images.size()}")
                 psnr_val.append(utils.torchPSNR(restored_images, reference_images))
 
         avg_psnr_val = torch.stack(psnr_val).mean().item()
