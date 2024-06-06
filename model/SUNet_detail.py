@@ -675,6 +675,24 @@ class SUNet(nn.Module):
 
         self.apply(self._init_weights)
 
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'absolute_pos_embed'}
+
+    @torch.jit.ignore
+    def no_weight_decay_keywords(self):
+        return {'relative_position_bias_table'}
+
+    # Encoder and Bottleneck
     def forward_features(self, x):
         print(f"Input to forward_features: {x.shape}")
         residual = x
@@ -695,7 +713,6 @@ class SUNet(nn.Module):
         print(f"After norm: {x.shape}")
 
         return x, residual, x_downsample
-
 
     # Decoder and Skip connection
     def forward_up_features(self, x, x_downsample):
