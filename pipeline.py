@@ -24,7 +24,7 @@ parser.add_argument('--input_dir', default='./input_images/', type=str, help='In
 parser.add_argument('--window_size', default=8, type=int, help='window size')
 parser.add_argument('--size', default=256, type=int, help='model image patch size')
 parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
-parser.add_argument('--result_dir', default='./output_results/', type=str, help='Directory for results')
+parser.add_argument('--result_dir', default='./output_fine-tuned/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
 args = parser.parse_args()
 
@@ -86,14 +86,13 @@ print('Restoring images...')
 stride = args.stride
 model_img = args.size
 
-for file_ in files:
+for file_ in tqdm(files):
     img = Image.open(file_).convert('L')  # Load as grayscale
     input_ = TF.to_tensor(img).unsqueeze(0).cuda()
     with torch.no_grad():
         square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
         output_patch = torch.zeros(square_input_[0].shape).type_as(square_input_[0])
         for i, data in enumerate(square_input_):
-            print(f'Processing patch {i}, shape: {square_input_[i].shape}')
             restored = model(square_input_[i])
             if i == 0:
                 output_patch += restored
