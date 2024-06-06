@@ -15,7 +15,7 @@ import yaml
 from skimage import img_as_ubyte
 
 # Load configuration
-with open('training.yaml', 'r') as config:w
+with open('training.yaml', 'r') as config:
     opt = yaml.safe_load(config)
 
 # Argument parsing
