@@ -704,32 +704,41 @@ class SUNet(nn.Module):
 
     # Encoder and Bottleneck
     def forward_features(self, x):
+        print(f"Input to forward_features: {x.shape}")
         residual = x
         x = self.patch_embed(x)
+        print(f"After patch_embed: {x.shape}")
         if self.ape:
             x = x + self.absolute_pos_embed
+            print(f"After adding absolute_pos_embed: {x.shape}")
         x = self.pos_drop(x)
         x_downsample = []
 
         for layer in self.layers:
             x_downsample.append(x)
             x = layer(x)
+            print(f"After layer: {x.shape}")
 
         x = self.norm(x)  # B L C
+        print(f"After norm: {x.shape}")
 
         return x, residual, x_downsample
 
-    # Dencoder and Skip connection
+    # Decoder and Skip connection
     def forward_up_features(self, x, x_downsample):
+        print(f"Input to forward_up_features: {x.shape}")
         for inx, layer_up in enumerate(self.layers_up):
             if inx == 0:
                 x = layer_up(x)
             else:
                 x = torch.cat([x, x_downsample[3 - inx]], -1)  # concat last dimension
+                print(f"After concatenation at index {inx}: {x.shape}")
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
+                print(f"After layer_up at index {inx}: {x.shape}")
 
         x = self.norm_up(x)  # B L C
+        print(f"After norm_up: {x.shape}")
 
         return x
 
@@ -737,21 +746,25 @@ class SUNet(nn.Module):
         H, W = self.patches_resolution
         B, L, C = x.shape
         assert L == H * W, "input features has wrong size"
+        print(f"Input to up_x4: {x.shape}")
 
         if self.final_upsample == "Dual up-sample":
             x = self.up(x)
-            # x = x.view(B, 4 * H, 4 * W, -1)
+            print(f"After upsample: {x.shape}")
             x = x.permute(0, 3, 1, 2)  # B,C,H,W
+            print(f"After permute: {x.shape}")
 
         return x
 
     def forward(self, x):
+        print(f"Initial input: {x.shape}")
         x = self.conv_first(x)
+        print(f"After conv_first: {x.shape}")
         x, residual, x_downsample = self.forward_features(x)
         x = self.forward_up_features(x, x_downsample)
         x = self.up_x4(x)
         out = self.output(x)
-        # x = x + residual
+        print(f"Output shape: {out.shape}")
         return out
 
     def flops(self):
