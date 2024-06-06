@@ -100,8 +100,8 @@ for epoch in range(1, OPT['EPOCHS'] + 1):
 
     for data in tqdm(train_loader):
         noisy_images, reference_images = data
-        print(f"noisy_images shape: {noisy_images.shape}")
-        print(f"reference_images shape: {reference_images.shape}")
+        #print(f"noisy_images shape: {noisy_images.shape}")
+        #print(f"reference_images shape: {reference_images.shape}")
         noisy_images, reference_images = noisy_images.cuda(), reference_images.cuda()
 
         optimizer.zero_grad()

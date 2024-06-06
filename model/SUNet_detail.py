@@ -227,7 +227,7 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x):
         H, W = self.input_resolution
         B, L, C = x.shape
-        print(f"Input to SwinTransformerBlock: B={B}, L={L}, C={C}, H={H}, W={W}")
+        #print(f"Input to SwinTransformerBlock: B={B}, L={L}, C={C}, H={H}, W={W}")
         
         # Ensure that the input length matches the expected length
         assert L == H * W, f"Input feature has wrong size: L={L}, expected={H * W}"
@@ -235,28 +235,28 @@ class SwinTransformerBlock(nn.Module):
         shortcut = x
         x = self.norm1(x)
         x = x.view(B, H, W, C)
-        print(f"After norm1 and view: {x.shape}")
+        #print(f"After norm1 and view: {x.shape}")
 
         # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
             shifted_x = x
-        print(f"After cyclic shift: {shifted_x.shape}")
+        #(f"After cyclic shift: {shifted_x.shape}")
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
-        print(f"After window_partition and view: {x_windows.shape}")
+        #print(f"After window_partition and view: {x_windows.shape}")
 
         # W-MSA/SW-MSA
         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
-        print(f"After self.attn: {attn_windows.shape}")
+        #print(f"After self.attn: {attn_windows.shape}")
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
         shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
-        print(f"After window_reverse: {shifted_x.shape}")
+        #print(f"After window_reverse: {shifted_x.shape}")
 
         # reverse cyclic shift
         if self.shift_size > 0:
@@ -264,12 +264,12 @@ class SwinTransformerBlock(nn.Module):
         else:
             x = shifted_x
         x = x.view(B, H * W, C)
-        print(f"After reverse cyclic shift and view: {x.shape}")
+        #print(f"After reverse cyclic shift and view: {x.shape}")
 
         # FFN
         x = shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
-        print(f"Output of SwinTransformerBlock: {x.shape}")
+        #print(f"Output of SwinTransformerBlock: {x.shape}")
 
         return x
 
@@ -557,9 +557,9 @@ class PatchEmbed(nn.Module):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        print(f"Input to PatchEmbed: B={B}, C={C}, H={H}, W={W}")
+        #print(f"Input to PatchEmbed: B={B}, C={C}, H={H}, W={W}")
         x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
-        print(f"Output of PatchEmbed: {x.shape}")
+        #print(f"Output of PatchEmbed: {x.shape}")
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -596,7 +596,7 @@ class SUNet(nn.Module):
 
         # Calculate expected resolution
         expected_resolution = img_size // patch_size
-        print(f"Expected resolution: {expected_resolution}")
+        #print(f"Expected resolution: {expected_resolution}")
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
@@ -605,7 +605,7 @@ class SUNet(nn.Module):
         num_patches = self.patch_embed.num_patches
         patches_resolution = self.patch_embed.patches_resolution
         self.patches_resolution = patches_resolution
-        print(f"Patches resolution: {patches_resolution}")
+        #print(f"Patches resolution: {patches_resolution}")
 
         # absolute position embedding
         if self.ape:
@@ -694,41 +694,41 @@ class SUNet(nn.Module):
 
     # Encoder and Bottleneck
     def forward_features(self, x):
-        print(f"Input to forward_features: {x.shape}")
+        #print(f"Input to forward_features: {x.shape}")
         residual = x
         x = self.patch_embed(x)
-        print(f"After patch_embed: {x.shape}")
+        #print(f"After patch_embed: {x.shape}")
         if self.ape:
             x = x + self.absolute_pos_embed
-            print(f"After adding absolute_pos_embed: {x.shape}")
+            #print(f"After adding absolute_pos_embed: {x.shape}")
         x = self.pos_drop(x)
         x_downsample = []
 
         for layer in self.layers:
             x_downsample.append(x)
             x = layer(x)
-            print(f"After layer: {x.shape}")
+            #print(f"After layer: {x.shape}")
 
         x = self.norm(x)  # B L C
-        print(f"After norm: {x.shape}")
+        #print(f"After norm: {x.shape}")
 
         return x, residual, x_downsample
 
     # Decoder and Skip connection
     def forward_up_features(self, x, x_downsample):
-        print(f"Input to forward_up_features: {x.shape}")
+        #print(f"Input to forward_up_features: {x.shape}")
         for inx, layer_up in enumerate(self.layers_up):
             if inx == 0:
                 x = layer_up(x)
             else:
                 x = torch.cat([x, x_downsample[3 - inx]], -1)  # concat last dimension
-                print(f"After concatenation at index {inx}: {x.shape}")
+                #print(f"After concatenation at index {inx}: {x.shape}")
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
-                print(f"After layer_up at index {inx}: {x.shape}")
+                #print(f"After layer_up at index {inx}: {x.shape}")
 
         x = self.norm_up(x)  # B L C
-        print(f"After norm_up: {x.shape}")
+        #print(f"After norm_up: {x.shape}")
 
         return x
 
@@ -736,25 +736,25 @@ class SUNet(nn.Module):
         H, W = self.patches_resolution
         B, L, C = x.shape
         assert L == H * W, "input features has wrong size"
-        print(f"Input to up_x4: {x.shape}")
+        #print(f"Input to up_x4: {x.shape}")
 
         if self.final_upsample == "Dual up-sample":
             x = self.up(x)
-            print(f"After upsample: {x.shape}")
+            #print(f"After upsample: {x.shape}")
             x = x.permute(0, 3, 1, 2)  # B,C,H,W
-            print(f"After permute: {x.shape}")
+            #print(f"After permute: {x.shape}")
 
         return x
 
     def forward(self, x):
-        print(f"Initial input: {x.shape}")
+        #print(f"Initial input: {x.shape}")
         x = self.conv_first(x)
-        print(f"After conv_first: {x.shape}")
+        #print(f"After conv_first: {x.shape}")
         x, residual, x_downsample = self.forward_features(x)
         x = self.forward_up_features(x, x_downsample)
         x = self.up_x4(x)
         out = self.output(x)
-        print(f"Output shape: {out.shape}")
+        #print(f"Output shape: {out.shape}")
         return out
 
     def flops(self):
