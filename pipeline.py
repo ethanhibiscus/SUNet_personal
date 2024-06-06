@@ -33,8 +33,8 @@ def overlapped_square(timg, kernel=256, stride=128):
     patch_images = []
     b, c, h, w = timg.size()
     X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 1, X, X).type_as(timg)
-    mask = torch.zeros(1, 1, X, X).type_as(timg)
+    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
+    mask = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
 
     img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
     mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
