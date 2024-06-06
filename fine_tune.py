@@ -1,20 +1,88 @@
+import os
 import torch
+import yaml
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms
-import os
+from torch.utils.data import DataLoader
+from warmup_scheduler import GradualWarmupScheduler
+from tqdm import tqdm
+from tensorboardX import SummaryWriter
+from model.SUNet import SUNet_model
 from PIL import Image
-from model.SUNet_detail import SUNet
-import yaml
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset
 
-class GrayscaleImageDataset(Dataset):
+# Set Seeds
+torch.backends.cudnn.benchmark = True
+random.seed(1234)
+np.random.seed(1234)
+torch.manual_seed(1234)
+torch.cuda.manual_seed_all(1234)
+
+# Load yaml configuration file
+with open('training.yaml', 'r') as config:
+    opt = yaml.safe_load(config)
+Train = opt['TRAINING']
+OPT = opt['OPTIM']
+
+# Build Model
+print('==> Build the model')
+model_restored = SUNet_model(opt)
+model_restored.cuda()
+
+# Training model path direction
+model_dir = Train['SAVE_DIR']
+os.makedirs(model_dir, exist_ok=True)
+
+# GPU settings
+gpus = ','.join([str(i) for i in opt['GPU']])
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+device_ids = [i for i in range(torch.cuda.device_count())]
+if torch.cuda.device_count() > 1:
+    print("\n\nLet's use", torch.cuda.device_count(), "GPUs!\n\n")
+if len(device_ids) > 1:
+    model_restored = nn.DataParallel(model_restored, device_ids=device_ids)
+
+# Log
+log_dir = "./logs"
+os.makedirs(log_dir, exist_ok=True)
+writer = SummaryWriter(log_dir=log_dir)
+
+# Optimizer
+start_epoch = 1
+new_lr = float(OPT['LR_INITIAL'])
+optimizer = optim.Adam(model_restored.parameters(), lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
+
+# Scheduler
+warmup_epochs = 3
+scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, OPT['EPOCHS'] - warmup_epochs, eta_min=float(OPT['LR_MIN']))
+scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
+scheduler.step()
+
+# Resume (optional)
+if Train['RESUME']:
+    path_chk_rest = "./pretrain-model/model_bestPSNR.pth"
+    checkpoint = torch.load(path_chk_rest)
+    model_restored.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    start_epoch = checkpoint['epoch'] + 1
+    for _ in range(1, start_epoch):
+        scheduler.step()
+    new_lr = scheduler.get_lr()[0]
+    print('==> Resuming Training with learning rate:', new_lr)
+
+# Loss
+L1_loss = nn.L1Loss()
+
+# Custom Dataset
+class CustomImageDataset(Dataset):
     def __init__(self, noisy_dir, reference_dir, transform=None):
         self.noisy_dir = noisy_dir
         self.reference_dir = reference_dir
+        self.transform = transform
         self.noisy_images = sorted([img for img in os.listdir(noisy_dir) if img.endswith('.png')])
         self.reference_images = sorted([img for img in os.listdir(reference_dir) if img.endswith('.png')])
-        self.transform = transform
 
     def __len__(self):
         return len(self.noisy_images)
@@ -23,96 +91,45 @@ class GrayscaleImageDataset(Dataset):
         noisy_img_path = os.path.join(self.noisy_dir, self.noisy_images[idx])
         reference_img_path = os.path.join(self.reference_dir, self.reference_images[idx])
         
-        noisy_img = Image.open(noisy_img_path).convert('L')
-        reference_img = Image.open(reference_img_path).convert('L')
-        
+        noisy_image = Image.open(noisy_img_path).convert("L")
+        reference_image = Image.open(reference_img_path).convert("L")
+
         if self.transform:
-            noisy_img = self.transform(noisy_img)
-            reference_img = self.transform(reference_img)
+            noisy_image = self.transform(noisy_image)
+            reference_image = self.transform(reference_image)
         
-        return noisy_img, reference_img
+        return noisy_image, reference_image
 
-class SUNet_model(nn.Module):
-    def __init__(self, config):
-        super(SUNet_model, self).__init__()
-        self.config = config
-        self.swin_unet = SUNet(img_size=config['SWINUNET']['IMG_SIZE'],
-                               patch_size=config['SWINUNET']['PATCH_SIZE'],
-                               in_chans=3,
-                               out_chans=3,
-                               embed_dim=config['SWINUNET']['EMB_DIM'],
-                               depths=config['SWINUNET']['DEPTH_EN'],
-                               num_heads=config['SWINUNET']['HEAD_NUM'],
-                               window_size=config['SWINUNET']['WIN_SIZE'],
-                               mlp_ratio=config['SWINUNET']['MLP_RATIO'],
-                               qkv_bias=config['SWINUNET']['QKV_BIAS'],
-                               qk_scale=config['SWINUNET']['QK_SCALE'],
-                               drop_rate=config['SWINUNET']['DROP_RATE'],
-                               drop_path_rate=config['SWINUNET']['DROP_PATH_RATE'],
-                               ape=config['SWINUNET']['APE'],
-                               patch_norm=config['SWINUNET']['PATCH_NORM'],
-                               use_checkpoint=config['SWINUNET']['USE_CHECKPOINTS'])
-
-    def forward(self, x):
-        if x.size()[1] == 1:
-            x = x.repeat(1, 3, 1, 1)
-        logits = self.swin_unet(x)
-        return logits
-
-# Paths
-noisy_dir = "./input_images"
-reference_dir = "./reference_images"
-pretrained_model_path = "./pretrain-model/model_bestPSNR.pth"
-save_model_path = "./fine_tuned_model.pth"
-
-# Hyperparameters
-batch_size = 16
-learning_rate = 1e-4
-num_epochs = 10
-
-# Transforms
-transform = transforms.ToTensor()
-
-# Dataset and DataLoader
-dataset = GrayscaleImageDataset(noisy_dir, reference_dir, transform=transform)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-# Load configuration from yaml
-with open('./training.yaml', 'r') as config_file:
-    config = yaml.safe_load(config_file)
-
-# Model, Loss, Optimizer
-model = SUNet_model(config)  # Initialize the SUNet model with configuration
-
-# Load pretrained model state dict
-checkpoint = torch.load(pretrained_model_path)
-if 'state_dict' in checkpoint:
-    model.load_state_dict(checkpoint['state_dict'])
-else:
-    model.load_state_dict(checkpoint)
-
-model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-
-criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+# DataLoaders
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = CustomImageDataset(noisy_dir='./input_images', reference_dir='./reference_images', transform=transform)
+train_loader = DataLoader(dataset=train_dataset, batch_size=OPT['BATCH'], shuffle=True, num_workers=0, drop_last=False)
 
 # Training Loop
-for epoch in range(num_epochs):
-    model.train()
-    running_loss = 0.0
-    for noisy_imgs, reference_imgs in dataloader:
-        noisy_imgs = noisy_imgs.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-        reference_imgs = reference_imgs.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-
+print('==> Training start: ')
+best_psnr = 0
+for epoch in range(start_epoch, OPT['EPOCHS'] + 1):
+    epoch_start_time = time.time()
+    epoch_loss = 0
+    model_restored.train()
+    for data in tqdm(train_loader):
+        input_ = data[0].cuda()
+        target = data[1].cuda()
         optimizer.zero_grad()
-        outputs = model(noisy_imgs)
-        loss = criterion(outputs, reference_imgs)
+        restored = model_restored(input_)
+        loss = L1_loss(restored, target)
         loss.backward()
         optimizer.step()
+        epoch_loss += loss.item()
 
-        running_loss += loss.item()
-    
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(dataloader)}")
+    # Save model periodically or based on performance
+    if epoch % Train['VAL_AFTER_EVERY'] == 0:
+        torch.save({'epoch': epoch, 'state_dict': model_restored.state_dict(), 'optimizer': optimizer.state_dict()}, os.path.join(model_dir, f"model_epoch_{epoch}.pth"))
 
-# Save the fine-tuned model
-torch.save(model.state_dict(), save_model_path)
+    # Update scheduler
+    scheduler.step()
+    print(f"Epoch {epoch}, Loss {epoch_loss}, Learning Rate {scheduler.get_lr()[0]}")
+    writer.add_scalar('train/loss', epoch_loss, epoch)
+    writer.add_scalar('train/lr', scheduler.get_lr()[0], epoch)
+
+writer.close()
