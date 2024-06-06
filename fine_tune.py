@@ -13,7 +13,7 @@ from model.SUNet import SUNet_model
 from PIL import Image
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-import time  # Add this import
+import time
 
 # Set Seeds
 torch.backends.cudnn.benchmark = True
@@ -23,7 +23,7 @@ torch.manual_seed(1234)
 torch.cuda.manual_seed_all(1234)
 
 # Load yaml configuration file
-with open('training.yaml', 'r') as config:
+with open('training.yaml', 'r') as config):
     opt = yaml.safe_load(config)
 Train = opt['TRAINING']
 OPT = opt['OPTIM']
