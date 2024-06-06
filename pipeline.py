@@ -33,14 +33,14 @@ def overlapped_square(timg, kernel=256, stride=128):
     patch_images = []
     b, c, h, w = timg.size()
     X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 1, X, X).type_as(timg)
+    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single channel
     mask = torch.zeros(1, 1, X, X).type_as(timg)
 
     img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
     mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
 
     patch = img.unfold(3, kernel, stride).unfold(2, kernel, stride)
-    patch = patch.contiguous().view(b, c, -1, kernel, kernel)
+    patch = patch.contiguous().view(b, 1, -1, kernel, kernel)  # Change to single channel
     patch = patch.permute(2, 0, 1, 4, 3)
 
     for each in range(len(patch)):
