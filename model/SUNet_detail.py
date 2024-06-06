@@ -564,33 +564,7 @@ class PatchEmbed(nn.Module):
 
 
 class SUNet(nn.Module):
-    r""" Swin Transformer
-        A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
-          https://arxiv.org/pdf/2103.14030
-
-    Args:
-        img_size (int | tuple(int)): Input image size. Default 224
-        patch_size (int | tuple(int)): Patch size. Default: 4
-        in_chans (int): Number of input image channels. Default: 3
-
-        embed_dim (int): Patch embedding dimension. Default: 96
-        depths (tuple(int)): Depth of each Swin Transformer layer.
-        num_heads (tuple(int)): Number of attention heads in different layers.
-        window_size (int): Window size. Default: 7
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4
-        qkv_bias (bool): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float): Override default qk scale of head_dim ** -0.5 if set. Default: None
-        drop_rate (float): Dropout rate. Default: 0
-        attn_drop_rate (float): Attention dropout rate. Default: 0
-        drop_path_rate (float): Stochastic depth rate. Default: 0.1
-        norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
-        ape (bool): If True, add absolute position embedding to the patch embedding. Default: False
-        patch_norm (bool): If True, add normalization after patch embedding. Default: True
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
-        final_upsample (str): Method of final upsample. Default: "Dual up-sample".
-    """
-
-    def __init__(self, img_size=224, patch_size=4, in_chans=1, out_chans=1,
+    def __init__(self, img_size=224, patch_size=4, in_chans=1, out_chans=1,  # Change in_chans and out_chans to 1
                  embed_dim=96, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
@@ -608,7 +582,7 @@ class SUNet(nn.Module):
         self.mlp_ratio = mlp_ratio
         self.final_upsample = final_upsample
         self.prelu = nn.PReLU()
-        self.conv_first = nn.Conv2d(in_chans, embed_dim, 3, 1, 1)
+        self.conv_first = nn.Conv2d(in_chans, embed_dim, 3, 1, 1)  # Initialize for single-channel input
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
@@ -682,26 +656,9 @@ class SUNet(nn.Module):
             self.up = UpSample(input_resolution=(img_size // patch_size, img_size // patch_size),
                                in_channels=embed_dim, scale_factor=4)
             self.output = nn.Conv2d(in_channels=embed_dim, out_channels=self.out_chans, kernel_size=3, stride=1,
-                                    padding=1, bias=False)  # kernel = 1
+                                    padding=1, bias=False)  # Change to single-channel output
 
         self.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-
-    @torch.jit.ignore
-    def no_weight_decay(self):
-        return {'absolute_pos_embed'}
-
-    @torch.jit.ignore
-    def no_weight_decay_keywords(self):
-        return {'relative_position_bias_table'}
 
     # Encoder and Bottleneck
     def forward_features(self, x):
@@ -752,18 +709,7 @@ class SUNet(nn.Module):
         x = self.forward_up_features(x, x_downsample)
         x = self.up_x4(x)
         out = self.output(x)
-        # x = x + residual
         return out
-
-    def flops(self):
-        flops = 0
-        flops += self.patch_embed.flops()
-        for i, layer in enumerate(self.layers):
-            flops += layer.flops()
-        flops += self.num_features * self.patches_resolution[0] * self.patches_resolution[1] // (2 ** self.num_layers)
-        flops += self.num_features * self.out_chans
-        return flops
-
 
 if __name__ == '__main__':
     from utils.model_utils import network_parameters
