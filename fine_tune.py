@@ -23,7 +23,7 @@ torch.manual_seed(1234)
 torch.cuda.manual_seed_all(1234)
 
 # Load yaml configuration file
-with open('training.yaml', 'r') as config):
+with open('training.yaml', 'r') as config:
     opt = yaml.safe_load(config)
 Train = opt['TRAINING']
 OPT = opt['OPTIM']
