@@ -55,7 +55,7 @@ val_size = 200
 train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
 # DataLoader
-train_loader = DataLoader(dataset=train_dataset, batch_size=12, shuffle=True, num_workers=2)  # Reduced batch size
+train_loader = DataLoader(dataset=train_dataset, batch_size=10, shuffle=True, num_workers=2)  # Reduced batch size
 val_loader = DataLoader(dataset=val_dataset, batch_size=6, shuffle=False, num_workers=1)  # Reduced batch size
 
 # Set seeds
