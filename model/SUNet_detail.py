@@ -574,7 +574,7 @@ class PatchEmbed(nn.Module):
 
 
 class SUNet(nn.Module):
-    def __init__(self, img_size=128, patch_size=4, in_chans=3, out_chans=3,
+    def __init__(self, img_size=224, patch_size=4, in_chans=3, out_chans=3,
                  embed_dim=96, depths=[2, 2, 2, 2], num_heads=[3, 6, 12, 24],
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
@@ -594,16 +594,13 @@ class SUNet(nn.Module):
         self.prelu = nn.PReLU()
         self.conv_first = nn.Conv2d(in_chans, embed_dim, 3, 1, 1)
 
-        # Adjust patch_size to ensure the correct dimensions
-        patch_size = 8
-
         # Calculate expected resolution
         expected_resolution = img_size // patch_size
         print(f"Expected resolution: {expected_resolution}")
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
+            img_size=img_size, patch_size=patch_size, in_chans=embed_dim, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)
         num_patches = self.patch_embed.num_patches
         patches_resolution = self.patch_embed.patches_resolution
@@ -716,7 +713,6 @@ class SUNet(nn.Module):
         print(f"After norm: {x.shape}")
 
         return x, residual, x_downsample
-
 
     # Decoder and Skip connection
     def forward_up_features(self, x, x_downsample):
