@@ -4,7 +4,7 @@ GPU: [0,1,2,3]
 VERBOSE: False
 
 SWINUNET:
-  IMG_SIZE: 128  # Ensure this matches the input image size
+  IMG_SIZE: 256
   PATCH_SIZE: 4
   WIN_SIZE: 8
   EMB_DIM: 96
@@ -13,8 +13,8 @@ SWINUNET:
   MLP_RATIO: 4.0
   QKV_BIAS: True
   QK_SCALE: 8
-  DROP_RATE: 0.0
-  ATTN_DROP_RATE: 0.0
+  DROP_RATE: 0.
+  ATTN_DROP_RATE: 0.
   DROP_PATH_RATE: 0.1
   APE: False
   PATCH_NORM: True
@@ -27,7 +27,7 @@ MODEL:
 # Optimization arguments.
 OPTIM:
   BATCH: 4
-  EPOCHS: 50
+  EPOCHS: 200
   # EPOCH_DECAY: [10]
   LR_INITIAL: 2e-4
   LR_MIN: 1e-6
