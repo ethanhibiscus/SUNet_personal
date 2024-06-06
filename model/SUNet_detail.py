@@ -227,28 +227,36 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x):
         H, W = self.input_resolution
         B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
+        print(f"Input to SwinTransformerBlock: B={B}, L={L}, C={C}, H={H}, W={W}")
+        
+        # Ensure that the input length matches the expected length
+        assert L == H * W, f"Input feature has wrong size: L={L}, expected={H * W}"
 
         shortcut = x
         x = self.norm1(x)
         x = x.view(B, H, W, C)
+        print(f"After norm1 and view: {x.shape}")
 
         # cyclic shift
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
             shifted_x = x
+        print(f"After cyclic shift: {shifted_x.shape}")
 
         # partition windows
         x_windows = window_partition(shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.view(-1, self.window_size * self.window_size, C)  # nW*B, window_size*window_size, C
+        print(f"After window_partition and view: {x_windows.shape}")
 
         # W-MSA/SW-MSA
         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+        print(f"After self.attn: {attn_windows.shape}")
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
         shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
+        print(f"After window_reverse: {shifted_x.shape}")
 
         # reverse cyclic shift
         if self.shift_size > 0:
@@ -256,10 +264,12 @@ class SwinTransformerBlock(nn.Module):
         else:
             x = shifted_x
         x = x.view(B, H * W, C)
+        print(f"After reverse cyclic shift and view: {x.shape}")
 
         # FFN
         x = shortcut + self.drop_path(x)
         x = x + self.drop_path(self.mlp(self.norm2(x)))
+        print(f"Output of SwinTransformerBlock: {x.shape}")
 
         return x
 
