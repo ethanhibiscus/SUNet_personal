@@ -24,7 +24,7 @@ parser.add_argument('--input_dir', default='./input_images/', type=str, help='In
 parser.add_argument('--window_size', default=8, type=int, help='window size')
 parser.add_argument('--size', default=256, type=int, help='model image patch size')
 parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
-parser.add_argument('--result_dir', default='./output_results/', type=str, help='Directory for results')
+parser.add_argument('--result_dir', default='./finetuned_output_results/', type=str, help='Directory for results')
 parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
 args = parser.parse_args()
 
