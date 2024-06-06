@@ -1,121 +1,138 @@
-import torch
-import torch.nn.functional as F
-import torchvision.transforms.functional as TF
-from PIL import Image
 import os
-from collections import OrderedDict
-from natsort import natsorted
-from glob import glob
-import cv2
-import argparse
-from model.SUNet import SUNet_model
-import math
-from tqdm import tqdm
+import torch
 import yaml
-from skimage import img_as_ubyte
+import random
+import numpy as np
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+from warmup_scheduler import GradualWarmupScheduler
+from tqdm import tqdm
+from tensorboardX import SummaryWriter
+from model.SUNet import SUNet_model
+from PIL import Image
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset
+import time
 
-# Load configuration
+# Set Seeds
+torch.backends.cudnn.benchmark = True
+random.seed(1234)
+np.random.seed(1234)
+torch.manual_seed(1234)
+torch.cuda.manual_seed_all(1234)
+
+# Load yaml configuration file
 with open('training.yaml', 'r') as config:
     opt = yaml.safe_load(config)
+Train = opt['TRAINING']
+OPT = opt['OPTIM']
 
-# Argument parsing
-parser = argparse.ArgumentParser(description='Demo Image Restoration')
-parser.add_argument('--input_dir', default='./input_images/', type=str, help='Input images')
-parser.add_argument('--window_size', default=8, type=int, help='window size')
-parser.add_argument('--size', default=256, type=int, help='model image patch size')
-parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
-parser.add_argument('--result_dir', default='./output_fine-tuned/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./checkpoints/model_epoch_50.pth', type=str, help='Path to weights')
-args = parser.parse_args()
+# Build Model
+print('==> Build the model')
+model_restored = SUNet_model(opt)
+model_restored.cuda()
 
-# Function definitions
-def overlapped_square(timg, kernel=256, stride=128):
-    patch_images = []
-    b, c, h, w = timg.size()
-    X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
-    mask = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
+# Training model path direction
+model_dir = Train['SAVE_DIR']
+os.makedirs(model_dir, exist_ok=True)
 
-    img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
-    mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
+# GPU settings
+gpus = ','.join([str(i) for i in opt['GPU']])
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = gpus
+device_ids = [i for i in range(torch.cuda.device_count())]
+if torch.cuda.device_count() > 1:
+    print("\n\nLet's use", torch.cuda.device_count(), "GPUs!\n\n")
+if len(device_ids) > 1:
+    model_restored = nn.DataParallel(model_restored, device_ids=device_ids)
 
-    patch = img.unfold(3, kernel, stride).unfold(2, kernel, stride)
-    patch = patch.contiguous().view(b, c, -1, kernel, kernel)
-    patch = patch.permute(2, 0, 1, 4, 3)
+# Log
+log_dir = "./logs"
+os.makedirs(log_dir, exist_ok=True)
+writer = SummaryWriter(log_dir=log_dir)
 
-    for each in range(len(patch)):
-        patch_images.append(patch[each])
+# Optimizer
+start_epoch = 1
+new_lr = float(OPT['LR_INITIAL'])
+optimizer = optim.Adam(model_restored.parameters(), lr=new_lr, betas=(0.9, 0.999), eps=1e-8)
 
-    return patch_images, mask, X
+# Scheduler
+warmup_epochs = 3
+scheduler_cosine = optim.lr_scheduler.CosineAnnealingLR(optimizer, OPT['EPOCHS'] - warmup_epochs, eta_min=float(OPT['LR_MIN']))
+scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=warmup_epochs, after_scheduler=scheduler_cosine)
+scheduler.step()
 
-def save_img(filepath, img):
-    cv2.imwrite(filepath, img)
+# Resume (optional)
+if Train['RESUME']:
+    path_chk_rest = "./pretrain-model/model_bestPSNR.pth"
+    checkpoint = torch.load(path_chk_rest)
+    model_restored.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    start_epoch = checkpoint['epoch'] + 1
+    for _ in range(1, start_epoch):
+        scheduler.step()
+    new_lr = scheduler.get_lr()[0]
+    print('==> Resuming Training with learning rate:', new_lr)
 
-def load_checkpoint(model, weights):
-    checkpoint = torch.load(weights)
-    try:
-        model.load_state_dict(checkpoint["state_dict"])
-    except:
-        state_dict = checkpoint["state_dict"]
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]
-            new_state_dict[name] = v
-        model.load_state_dict(new_state_dict)
+# Loss
+L1_loss = nn.L1Loss()
 
-inp_dir = args.input_dir
-out_dir = args.result_dir
+# Custom Dataset
+class CustomImageDataset(Dataset):
+    def __init__(self, noisy_dir, reference_dir, transform=None):
+        self.noisy_dir = noisy_dir
+        self.reference_dir = reference_dir
+        self.transform = transform
+        self.noisy_images = sorted([img for img in os.listdir(noisy_dir) if img.endswith('.png')])
+        self.reference_images = sorted([img for img in os.listdir(reference_dir) if img.endswith('.png')])
 
-os.makedirs(out_dir, exist_ok=True)
+    def __len__(self):
+        return len(self.noisy_images)
 
-files = natsorted(glob(os.path.join(inp_dir, '*.jpg'))
-                  + glob(os.path.join(inp_dir, '*.JPG'))
-                  + glob(os.path.join(inp_dir, '*.png'))
-                  + glob(os.path.join(inp_dir, '*.PNG')))
+    def __getitem__(self, idx):
+        noisy_img_path = os.path.join(self.noisy_dir, self.noisy_images[idx])
+        reference_img_path = os.path.join(self.reference_dir, self.reference_images[idx])
+        
+        noisy_image = Image.open(noisy_img_path).convert("L")
+        reference_image = Image.open(reference_img_path).convert("L")
 
-if len(files) == 0:
-    raise Exception(f"No files found at {inp_dir}")
+        if self.transform:
+            noisy_image = self.transform(noisy_image)
+            reference_image = self.transform(reference_image)
+        
+        return noisy_image, reference_image
 
-model = SUNet_model(opt)
-model.cuda()
-load_checkpoint(model, args.weights)
-model.eval()
+# DataLoaders
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = CustomImageDataset(noisy_dir='./input_images', reference_dir='./reference_images', transform=transform)
+train_loader = DataLoader(dataset=train_dataset, batch_size=OPT['BATCH'], shuffle=True, num_workers=0, drop_last=False)
 
-print('Restoring images...')
+# Training Loop
+print('==> Training start: ')
+best_psnr = 0
+for epoch in range(start_epoch, OPT['EPOCHS'] + 1):
+    epoch_start_time = time.time()
+    epoch_loss = 0
+    model_restored.train()
+    for data in tqdm(train_loader):
+        input_ = data[0].cuda()
+        target = data[1].cuda()
+        optimizer.zero_grad()
+        restored = model_restored(input_)
+        loss = L1_loss(restored, target)
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
 
-stride = args.stride
-model_img = args.size
+    # Save model periodically or based on performance
+    if epoch % Train['VAL_AFTER_EVERY'] == 0:
+        torch.save({'epoch': epoch, 'state_dict': model_restored.state_dict(), 'optimizer': optimizer.state_dict()}, os.path.join(model_dir, f"model_epoch_{epoch}.pth"))
 
-for file_ in tqdm(files):
-    img = Image.open(file_).convert('L')  # Load as grayscale
-    input_ = TF.to_tensor(img).unsqueeze(0).cuda()
-    with torch.no_grad():
-        square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
-        output_patch = torch.zeros(square_input_[0].shape).type_as(square_input_[0])
-        for i, data in enumerate(square_input_):
-            restored = model(square_input_[i])
-            if i == 0:
-                output_patch += restored
-            else:
-                output_patch = torch.cat([output_patch, restored], dim=0)
+    # Update scheduler
+    scheduler.step()
+    print(f"Epoch {epoch}, Loss {epoch_loss}, Learning Rate {scheduler.get_lr()[0]}")
+    writer.add_scalar('train/loss', epoch_loss, epoch)
+    writer.add_scalar('train/lr', scheduler.get_lr()[0], epoch)
 
-        B, C, PH, PW = output_patch.shape
-        weight = torch.ones(B, C, PH, PH).type_as(output_patch)
-        patch = output_patch.contiguous().view(B, C, -1, model_img * model_img)
-        patch = patch.permute(2, 1, 3, 0)
-        patch = patch.contiguous().view(1, C * model_img * model_img, -1)
-        weight_mask = weight.contiguous().view(B, C, -1, model_img * model_img)
-        weight_mask = weight_mask.permute(2, 1, 3, 0)
-        weight_mask = weight_mask.contiguous().view(1, C * model_img * model_img, -1)
-        restored = F.fold(patch, output_size=(max_wh, max_wh), kernel_size=model_img, stride=stride)
-        we_mk = F.fold(weight_mask, output_size=(max_wh, max_wh), kernel_size=model_img, stride=stride)
-        restored /= we_mk
-        restored = torch.masked_select(restored, mask.bool()).reshape(input_.shape)
-        restored = torch.clamp(restored, 0, 1)
-
-    restored = restored.permute(0, 2, 3, 1).cpu().detach().numpy()
-    restored = img_as_ubyte(restored[0, :, :, 0])  # Convert to single channel ubyte
-    f = os.path.splitext(os.path.split(file_)[-1])[0]
-    save_img((os.path.join(out_dir, f + '.png')), restored)
-
-print(f"Files saved at {out_dir}")
+writer.close()

@@ -25,7 +25,7 @@ parser.add_argument('--window_size', default=8, type=int, help='window size')
 parser.add_argument('--size', default=256, type=int, help='model image patch size')
 parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
 parser.add_argument('--result_dir', default='./output_fine-tuned/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
+parser.add_argument('--weights', default='./checkpoints/model_epoch_50.pth', type=str, help='Path to weights')
 args = parser.parse_args()
 
 # Function definitions
