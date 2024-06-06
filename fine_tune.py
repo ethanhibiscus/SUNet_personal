@@ -13,6 +13,8 @@ from model.SUNet import SUNet_model
 from PIL import Image
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
+import time  # Add this import
+
 # Set Seeds
 torch.backends.cudnn.benchmark = True
 random.seed(1234)
