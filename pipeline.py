@@ -33,14 +33,14 @@ def overlapped_square(timg, kernel=256, stride=128):
     patch_images = []
     b, c, h, w = timg.size()
     X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single channel
+    img = torch.zeros(1, 3, X, X).type_as(timg)
     mask = torch.zeros(1, 1, X, X).type_as(timg)
 
     img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
     mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
 
     patch = img.unfold(3, kernel, stride).unfold(2, kernel, stride)
-    patch = patch.contiguous().view(b, 1, -1, kernel, kernel)  # Change to single channel
+    patch = patch.contiguous().view(b, c, -1, kernel, kernel)
     patch = patch.permute(2, 0, 1, 4, 3)
 
     for each in range(len(patch)):
@@ -49,7 +49,7 @@ def overlapped_square(timg, kernel=256, stride=128):
     return patch_images, mask, X
 
 def save_img(filepath, img):
-    cv2.imwrite(filepath, img)
+    cv2.imwrite(filepath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 def load_checkpoint(model, weights):
     checkpoint = torch.load(weights)
@@ -87,7 +87,7 @@ stride = args.stride
 model_img = args.size
 
 for file_ in files:
-    img = Image.open(file_).convert('L')  # Convert to grayscale
+    img = Image.open(file_).convert('RGB')
     input_ = TF.to_tensor(img).unsqueeze(0).cuda()
     with torch.no_grad():
         square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
