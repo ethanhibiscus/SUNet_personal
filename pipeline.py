@@ -15,7 +15,7 @@ import yaml
 from skimage import img_as_ubyte
 
 # Load configuration
-with open('training.yaml', 'r') as config:
+with open('training.yaml', 'r') as config:w
     opt = yaml.safe_load(config)
 
 # Argument parsing
@@ -24,8 +24,8 @@ parser.add_argument('--input_dir', default='./input_images/', type=str, help='In
 parser.add_argument('--window_size', default=8, type=int, help='window size')
 parser.add_argument('--size', default=256, type=int, help='model image patch size')
 parser.add_argument('--stride', default=128, type=int, help='reconstruction stride')
-parser.add_argument('--result_dir', default='./output_fine-tuned/', type=str, help='Directory for results')
-parser.add_argument('--weights', default='./checkpoints/model_epoch_50.pth', type=str, help='Path to weights')
+parser.add_argument('--result_dir', default='./output_results/', type=str, help='Directory for results')
+parser.add_argument('--weights', default='./pretrain-model/model_bestPSNR.pth', type=str, help='Path to weights')
 args = parser.parse_args()
 
 # Function definitions
@@ -33,8 +33,8 @@ def overlapped_square(timg, kernel=256, stride=128):
     patch_images = []
     b, c, h, w = timg.size()
     X = int(math.ceil(max(h, w) / float(kernel)) * kernel)
-    img = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
-    mask = torch.zeros(1, 1, X, X).type_as(timg)  # Change to single-channel
+    img = torch.zeros(1, 3, X, X).type_as(timg)
+    mask = torch.zeros(1, 1, X, X).type_as(timg)
 
     img[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)] = timg
     mask[:, :, ((X - h) // 2):((X - h) // 2 + h), ((X - w) // 2):((X - w) // 2 + w)].fill_(1.0)
@@ -49,7 +49,7 @@ def overlapped_square(timg, kernel=256, stride=128):
     return patch_images, mask, X
 
 def save_img(filepath, img):
-    cv2.imwrite(filepath, img)
+    cv2.imwrite(filepath, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 def load_checkpoint(model, weights):
     checkpoint = torch.load(weights)
@@ -81,13 +81,13 @@ model.cuda()
 load_checkpoint(model, args.weights)
 model.eval()
 
-print('Restoring images...')
+print('restoring images...')
 
 stride = args.stride
 model_img = args.size
 
-for file_ in tqdm(files):
-    img = Image.open(file_).convert('L')  # Load as grayscale
+for file_ in files:
+    img = Image.open(file_).convert('RGB')
     input_ = TF.to_tensor(img).unsqueeze(0).cuda()
     with torch.no_grad():
         square_input_, mask, max_wh = overlapped_square(input_.cuda(), kernel=model_img, stride=stride)
@@ -114,7 +114,7 @@ for file_ in tqdm(files):
         restored = torch.clamp(restored, 0, 1)
 
     restored = restored.permute(0, 2, 3, 1).cpu().detach().numpy()
-    restored = img_as_ubyte(restored[0, :, :, 0])  # Convert to single channel ubyte
+    restored = img_as_ubyte(restored[0])
     f = os.path.splitext(os.path.split(file_)[-1])[0]
     save_img((os.path.join(out_dir, f + '.png')), restored)
 

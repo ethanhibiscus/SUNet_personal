@@ -1,15 +1,14 @@
 import torch.nn as nn
 from model.SUNet_detail import SUNet
 
-
 class SUNet_model(nn.Module):
     def __init__(self, config):
         super(SUNet_model, self).__init__()
         self.config = config
         self.swin_unet = SUNet(img_size=config['SWINUNET']['IMG_SIZE'],
                                patch_size=config['SWINUNET']['PATCH_SIZE'],
-                               in_chans=3,
-                               out_chans=3,
+                               in_chans=1,  # Change to 1 for single-channel input
+                               out_chans=1,  # Change to 1 for single-channel output
                                embed_dim=config['SWINUNET']['EMB_DIM'],
                                depths=config['SWINUNET']['DEPTH_EN'],
                                num_heads=config['SWINUNET']['HEAD_NUM'],
@@ -24,17 +23,14 @@ class SUNet_model(nn.Module):
                                use_checkpoint=config['SWINUNET']['USE_CHECKPOINTS'])
 
     def forward(self, x):
-        if x.size()[1] == 1:
-            x = x.repeat(1, 3, 1, 1)
         logits = self.swin_unet(x)
         return logits
-    
+
 if __name__ == '__main__':
     from utils.model_utils import network_parameters
     import torch
     import yaml
     from thop import profile
-    from utils.model_utils import network_parameters
 
     ## Load yaml configuration file
     with open('../training.yaml', 'r') as config:
@@ -44,8 +40,8 @@ if __name__ == '__main__':
 
     height = 256
     width = 256
-    x = torch.randn((1, 156, height, width))  # .cuda()
-    model = SUNet_model(opt)  # .cuda()
+    x = torch.randn((1, 1, height, width))  # Single-channel input
+    model = SUNet_model(opt)
     out = model(x)
     flops, params = profile(model, (x,))
     print(out.size())
